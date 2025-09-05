@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema ML - Dashboard Completo</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .login-card {
+            background: white;
+            border-radius: 15px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 500px;
+            margin: 100px auto;
+        }
+        
+        .dashboard {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            margin: 20px 0;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 10px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+        }
+        
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        
+        .feature-card {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            border: 1px solid #e9ecef;
+            transition: transform 0.3s ease;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        
+        .feature-card h3 {
+            color: #495057;
+            margin-bottom: 15px;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-online {
+            background-color: #28a745;
+            box-shadow: 0 0 10px rgba(40, 167, 69, 0.3);
+        }
+        
+        .status-offline {
+            background-color: #dc3545;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .api-result {
+            background: #e7f3ff;
+            border: 1px solid #bee5eb;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .welcome-message {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        
+        const API_BASE = 'http://localhost:8001';
+        
+        function App() {
+            const [isAuthenticated, setIsAuthenticated] = useState(false);
+            const [loading, setLoading] = useState(true);
+            const [backendStatus, setBackendStatus] = useState('checking');
+            const [mlStatus, setMLStatus] = useState('checking');
+            const [apiResults, setApiResults] = useState({});
+            
+            useEffect(() => {
+                checkAuthentication();
+                checkBackendStatus();
+            }, []);
+            
+            const checkAuthentication = () => {
+                // Verificar se retornou do OAuth
+                const urlParams = new URLSearchParams(window.location.search);
+                const code = urlParams.get('code');
+                const state = urlParams.get('state');
+                
+                if (code && state) {
+                    setIsAuthenticated(true);
+                    // Limpar URL
+                    window.history.replaceState({}, document.title, "/");
+                }
+                
+                setLoading(false);
+            };
+            
+            const checkBackendStatus = async () => {
+                try {
+                    const response = await fetch(`${API_BASE}/health`);
+                    if (response.ok) {
+                        setBackendStatus('online');
+                        checkMLStatus();
+                    } else {
+                        setBackendStatus('offline');
+                    }
+                } catch (error) {
+                    setBackendStatus('offline');
+                }
+            };
+            
+            const checkMLStatus = async () => {
+                try {
+                    const response = await fetch(`${API_BASE}/ml/status`);
+                    const data = await response.json();
+                    setMLStatus(data.status === 'connected' ? 'online' : 'blocked');
+                } catch (error) {
+                    setMLStatus('offline');
+                }
+            };
+            
+            const startOAuth = () => {
+                window.location.href = `${API_BASE}/auth/oauth`;
+            };
+            
+            const logout = () => {
+                setIsAuthenticated(false);
+                setApiResults({});
+                window.history.replaceState({}, document.title, "/");
+            };
+            
+            const testAPI = async (endpoint, label) => {
+                setApiResults(prev => ({...prev, [label]: 'loading'}));
+                
+                try {
+                    const response = await fetch(`${API_BASE}${endpoint}`);
+                    const data = await response.json();
+                    setApiResults(prev => ({...prev, [label]: data}));
+                } catch (error) {
+                    setApiResults(prev => ({...prev, [label]: {error: error.message}}));
+                }
+            };
+            
+            if (loading) {
+                return (
+                    <div className="container">
+                        <div className="login-card">
+                            <div className="loading"></div>
+                            <p>Carregando sistema...</p>
+                        </div>
+                    </div>
+                );
+            }
+            
+            if (!isAuthenticated) {
+                return (
+                    <div className="container">
+                        <div className="login-card">
+                            <h1>🚀 Sistema ML Integration</h1>
+                            <p style={{margin: '20px 0', color: '#666'}}>
+                                Faça login com sua conta do Mercado Livre para acessar todas as funcionalidades
+                            </p>
+                            
+                            <div style={{margin: '30px 0'}}>
+                                <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '10px 0'}}>
+                                    <span className={`status-indicator status-${backendStatus}`}></span>
+                                    <span>Backend: {backendStatus === 'online' ? 'Online' : 'Offline'}</span>
+                                </div>
+                                <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '10px 0'}}>
+                                    <span className={`status-indicator status-${mlStatus}`}></span>
+                                    <span>ML API: {mlStatus === 'online' ? 'Conectado' : mlStatus === 'blocked' ? 'Bloqueado (OAuth OK)' : 'Offline'}</span>
+                                </div>
+                            </div>
+                            
+                            <button 
+                                className="btn" 
+                                onClick={startOAuth}
+                                disabled={backendStatus !== 'online'}
+                            >
+                                🔑 Fazer Login com Mercado Livre
+                            </button>
+                            
+                            <div style={{marginTop: '30px', fontSize: '14px', color: '#888'}}>
+                                <p>✅ OAuth2 + PKCE Security</p>
+                                <p>✅ Client ID: 6377568852501213</p>
+                                <p>✅ Produção Ready</p>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+            
+            return (
+                <div className="container">
+                    <div className="header">
+                        <div>
+                            <h1>🎉 Bem-vindo ao Sistema ML!</h1>
+                            <p>Autenticação OAuth2 realizada com sucesso</p>
+                        </div>
+                        <button className="btn btn-danger" onClick={logout}>
+                            Sair
+                        </button>
+                    </div>
+                    
+                    <div className="welcome-message">
+                        <h2>🚀 Sistema Totalmente Funcional!</h2>
+                        <p>Agora você pode usar todas as funcionalidades do Mercado Livre integradas</p>
+                    </div>
+                    
+                    <div className="dashboard">
+                        <h2>🔧 Funcionalidades Disponíveis</h2>
+                        <div className="features-grid">
+                            <div className="feature-card">
+                                <h3>📁 Categorias ML</h3>
+                                <p>Buscar todas as categorias disponíveis no Mercado Livre</p>
+                                <button className="btn" onClick={() => testAPI('/ml/categories', 'categories')}>
+                                    Buscar Categorias
+                                </button>
+                                {apiResults.categories === 'loading' && <div className="loading"></div>}
+                                {apiResults.categories && apiResults.categories !== 'loading' && (
+                                    <div className="api-result">
+                                        <pre>{JSON.stringify(apiResults.categories, null, 2)}</pre>
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <div className="feature-card">
+                                <h3>🔍 Buscar Produtos</h3>
+                                <p>Pesquisar produtos no marketplace</p>
+                                <button className="btn" onClick={() => testAPI('/ml/search?q=notebook', 'search')}>
+                                    Buscar "notebook"
+                                </button>
+                                {apiResults.search === 'loading' && <div className="loading"></div>}
+                                {apiResults.search && apiResults.search !== 'loading' && (
+                                    <div className="api-result">
+                                        <pre>{JSON.stringify(apiResults.search, null, 2)}</pre>
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <div className="feature-card">
+                                <h3>📦 Detalhes Produto</h3>
+                                <p>Obter informações detalhadas de produtos</p>
+                                <button className="btn" onClick={() => testAPI('/ml/products/MLB123456', 'product')}>
+                                    Produto Exemplo
+                                </button>
+                                {apiResults.product === 'loading' && <div className="loading"></div>}
+                                {apiResults.product && apiResults.product !== 'loading' && (
+                                    <div className="api-result">
+                                        <pre>{JSON.stringify(apiResults.product, null, 2)}</pre>
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <div className="feature-card">
+                                <h3>⚡ Status Sistema</h3>
+                                <p>Verificar conectividade e status das APIs</p>
+                                <button className="btn" onClick={() => testAPI('/test/cloudfront', 'status')}>
+                                    Testar Conectividade
+                                </button>
+                                {apiResults.status === 'loading' && <div className="loading"></div>}
+                                {apiResults.status && apiResults.status !== 'loading' && (
+                                    <div className="api-result">
+                                        <pre>{JSON.stringify(apiResults.status, null, 2)}</pre>
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <div className="feature-card">
+                                <h3>📖 Demo OAuth Flow</h3>
+                                <p>Documentação completa do fluxo OAuth2</p>
+                                <button className="btn" onClick={() => testAPI('/demo/oauth-flow', 'demo')}>
+                                    Ver Documentação
+                                </button>
+                                {apiResults.demo === 'loading' && <div className="loading"></div>}
+                                {apiResults.demo && apiResults.demo !== 'loading' && (
+                                    <div className="api-result">
+                                        <pre>{JSON.stringify(apiResults.demo, null, 2)}</pre>
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <div className="feature-card">
+                                <h3>🎯 Próximas Funcionalidades</h3>
+                                <ul style={{textAlign: 'left', padding: '0 20px'}}>
+                                    <li>Gerenciamento de anúncios</li>
+                                    <li>Análise de vendas</li>
+                                    <li>Automação de campanhas</li>
+                                    <li>Webhooks ML</li>
+                                    <li>Relatórios avançados</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+        
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>

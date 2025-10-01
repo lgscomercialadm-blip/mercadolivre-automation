@@ -58,7 +58,71 @@ export async function GET(_req: NextRequest): Promise<NextResponse> {
       shipping = await shippingRes.json();
     }
 
-    // 3. Buscar reputação
+    // 3. Buscar configurações de envio dos anúncios para análise detalhada
+    const itemsRes = await fetch(
+      `https://api.mercadolibre.com/users/${userId}/items/search?status=active&limit=50`,
+      {
+        headers: { "Authorization": `Bearer ${accessToken}` },
+        cache: "no-store",
+      }
+    );
+
+    let shippingAnalysis = {
+      mercado_envios_accepted: false,
+      shipping_modes: {
+        custom: 0,
+        not_specified: 0,
+        me2: 0,
+        full: 0,
+        flex: 0
+      },
+      total_items: 0
+    };
+
+    if (itemsRes.ok) {
+      const itemsData = await itemsRes.json();
+      const itemIds = itemsData.results || [];
+      shippingAnalysis.total_items = itemIds.length;
+
+      // Analisar alguns itens para verificar configurações de envio
+      if (itemIds.length > 0) {
+        const sampleIds = itemIds.slice(0, 10).join(',');
+        const sampleItemsRes = await fetch(
+          `https://api.mercadolibre.com/items?ids=${sampleIds}`,
+          { cache: "no-store" }
+        );
+
+        if (sampleItemsRes.ok) {
+          const sampleItems = await sampleItemsRes.json();
+          
+          for (const itemResponse of sampleItems) {
+            if (itemResponse.code === 200 && itemResponse.body) {
+              const item = itemResponse.body;
+              const shippingMode = item.shipping?.mode || 'not_specified';
+              const freeShipping = item.shipping?.free_shipping || false;
+              
+              // Contar modos de envio
+              if (shippingMode === 'custom') {
+                shippingAnalysis.shipping_modes.custom++;
+              } else if (shippingMode === 'not_specified') {
+                shippingAnalysis.shipping_modes.not_specified++;
+              } else if (shippingMode === 'me2') {
+                shippingAnalysis.shipping_modes.me2++;
+                shippingAnalysis.mercado_envios_accepted = true;
+              } else if (shippingMode === 'full') {
+                shippingAnalysis.shipping_modes.full++;
+                shippingAnalysis.mercado_envios_accepted = true;
+              } else if (shippingMode === 'flex') {
+                shippingAnalysis.shipping_modes.flex++;
+                shippingAnalysis.mercado_envios_accepted = true;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 4. Buscar reputação
     const reputationRes = await fetch(`https://api.mercadolibre.com/users/${userId}/reputation`, {
       headers: { "Authorization": `Bearer ${accessToken}` },
     });
@@ -85,6 +149,7 @@ export async function GET(_req: NextRequest): Promise<NextResponse> {
         registration_date: user.registration_date,
       },
       shipping,
+      shipping_analysis: shippingAnalysis,
       reputation,
       insights,
       improvement_suggestions: suggestions,

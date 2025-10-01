@@ -61,7 +61,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
     // Buscar TODOS os pedidos do período (não só 50!)
     const ordersRes = await fetch(
-      `https://api.mercadolibre.com/orders/search?seller=${userId}&order.date_created.from=${dateFromISO}&limit=200`,
+      `https://api.mercadolibre.com/orders/search?seller=${userId}&order.date_created.from=${dateFromISO}&limit=200&order.status=paid`,
       {
         headers: { "Authorization": `Bearer ${accessToken}` },
         cache: "no-store",

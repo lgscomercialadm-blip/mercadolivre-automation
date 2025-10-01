@@ -55,12 +55,18 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
     // SOLUÇÃO ROBUSTA: Extrair code_verifier do state (estratégia primária)
     let codeVerifier: string | undefined;
+    let stateDecodeError: string | null = null;
     
     try {
       // Tentar decodificar o state que contém o verifier
       const stateDecoded = Buffer.from(receivedState, "base64url").toString("utf-8");
       const stateData = JSON.parse(stateDecoded);
       codeVerifier = stateData.verifier;
+      
+      console.log("[CALLBACK] State decodificado com sucesso:", { 
+        hasVerifier: !!codeVerifier,
+        timestamp: stateData.timestamp 
+      });
       
       // Validar timestamp (não aceitar states com mais de 15 minutos)
       const age = Date.now() - stateData.timestamp;
@@ -71,9 +77,16 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           error: "State expirado. Tente fazer login novamente." 
         });
       }
-    } catch {
+    } catch (err) {
       // Se falhar ao decodificar, tentar pegar do cookie (backup)
+      stateDecodeError = err instanceof Error ? err.message : "Erro desconhecido";
+      console.log("[CALLBACK] Falha ao decodificar state:", stateDecodeError);
+      console.log("[CALLBACK] Tentando pegar verifier do cookie...");
       codeVerifier = jar.get("meli_code_verifier")?.value;
+      
+      if (codeVerifier) {
+        console.log("[CALLBACK] Code verifier encontrado no cookie!");
+      }
     }
     
     // Verificar se conseguimos o code_verifier de alguma fonte
@@ -84,11 +97,15 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         error: "code_verifier não encontrado. Tente fazer login novamente.",
         debug: {
           state_received: !!receivedState,
+          state_decode_error: stateDecodeError,
           cookie_verifier: !!jar.get("meli_code_verifier"),
-          cookie_state: !!jar.get("meli_oauth_state")
+          cookie_state: !!jar.get("meli_oauth_state"),
+          all_cookies: jar.getAll().map(c => c.name)
         }
       });
     }
+    
+    console.log("[CALLBACK] Code verifier OK, trocando por token...");
     
     const token = await exchangeToken(url.searchParams, codeVerifier);
     

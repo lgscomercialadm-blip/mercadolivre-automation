@@ -71,7 +71,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           error: "State expirado. Tente fazer login novamente." 
         });
       }
-    } catch (decodeError) {
+    } catch {
       // Se falhar ao decodificar, tentar pegar do cookie (backup)
       codeVerifier = jar.get("meli_code_verifier")?.value;
     }

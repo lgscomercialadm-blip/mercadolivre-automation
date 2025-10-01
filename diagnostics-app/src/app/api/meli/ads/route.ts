@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
 /**
@@ -50,7 +50,7 @@ interface ItemAnalysis {
   improvement_suggestions: string[];
 }
 
-export async function GET(_req: NextRequest): Promise<NextResponse> {
+export async function GET(): Promise<NextResponse> {
   try {
     const jar = await cookies();
     const tokenCookie = jar.get("meli_token");
@@ -135,6 +135,7 @@ export async function GET(_req: NextRequest): Promise<NextResponse> {
 /**
  * Analisa um item completo - BASEADO NA BIBLIOTECA
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function analyzeItem(item: any): ItemAnalysis {
   const missingFields: string[] = [];
   const suggestions: string[] = [];
@@ -161,6 +162,7 @@ function analyzeItem(item: any): ItemAnalysis {
   }
 
   // Verificar fundo branco
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const hasWhiteBackground = item.pictures?.some((p: any) => 
     p.id?.includes('white') || p.url?.includes('white')
   ) || false;

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
 function getEnv(name: string): string {
@@ -9,7 +9,7 @@ function getEnv(name: string): string {
   return value.trim();
 }
 
-export async function GET(_req: NextRequest): Promise<NextResponse> {
+export async function GET(): Promise<NextResponse> {
   const clientId = getEnv("MELI_CLIENT_ID");
   const redirectUri = getEnv("MELI_REDIRECT_URI");
 

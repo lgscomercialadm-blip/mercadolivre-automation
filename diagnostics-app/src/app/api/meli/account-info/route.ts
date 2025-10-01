@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
 /**
@@ -20,7 +20,7 @@ interface ImprovementSuggestion {
   icon: string;
 }
 
-export async function GET(_req: NextRequest): Promise<NextResponse> {
+export async function GET(): Promise<NextResponse> {
   try {
     const jar = await cookies();
     const tokenCookie = jar.get("meli_token");
@@ -67,7 +67,7 @@ export async function GET(_req: NextRequest): Promise<NextResponse> {
       }
     );
 
-    let shippingAnalysis = {
+    const shippingAnalysis = {
       mercado_envios_accepted: false,
       shipping_modes: {
         custom: 0,
@@ -99,7 +99,6 @@ export async function GET(_req: NextRequest): Promise<NextResponse> {
             if (itemResponse.code === 200 && itemResponse.body) {
               const item = itemResponse.body;
               const shippingMode = item.shipping?.mode || 'not_specified';
-              const freeShipping = item.shipping?.free_shipping || false;
               
               // Contar modos de envio
               if (shippingMode === 'custom') {
@@ -164,6 +163,7 @@ export async function GET(_req: NextRequest): Promise<NextResponse> {
 /**
  * Gera insights sobre a reputação - BASEADO NA BIBLIOTECA
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function generateReputationInsights(user: any, reputation: any): ReputationInsight[] {
   const insights: ReputationInsight[] = [];
 
@@ -204,7 +204,6 @@ function generateReputationInsights(user: any, reputation: any): ReputationInsig
   // Análise de transações
   const transactions = reputation.transactions || {};
   const total = transactions.total || 0;
-  const completed = transactions.completed || 0;
   const canceled = transactions.canceled || 0;
   
   if (total > 0) {
@@ -252,6 +251,7 @@ function generateReputationInsights(user: any, reputation: any): ReputationInsig
 /**
  * Gera sugestões de melhoria - BASEADO NA BIBLIOTECA
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function generateImprovementSuggestions(user: any, reputation: any): ImprovementSuggestion[] {
   const suggestions: ImprovementSuggestion[] = [];
 
@@ -322,7 +322,6 @@ function generateImprovementSuggestions(user: any, reputation: any): Improvement
 
   // Análise de sales
   const sales = reputation.sales || {};
-  const period = sales.period || 'unknown';
   const completed_sales = sales.completed || 0;
   
   if (completed_sales < 10) {

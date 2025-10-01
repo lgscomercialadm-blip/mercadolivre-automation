@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { getValidToken } from "@/lib/meli-token-manager";
 
 /**
  * Sales Analytics API - Baseado na lógica da biblioteca

@@ -31,7 +31,7 @@ export async function GET(): Promise<NextResponse> {
 
     const token = JSON.parse(tokenCookie.value);
     const accessToken = token.access_token;
-    const userId = token.user_id;
+    const userId = String(token.user_id); // Converter para string
 
     // 1. Buscar informações do usuário
     const userRes = await fetch(`https://api.mercadolibre.com/users/${userId}`, {

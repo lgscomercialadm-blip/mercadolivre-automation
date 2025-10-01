@@ -39,7 +39,8 @@ export async function GET(): Promise<NextResponse> {
   jar.set("meli_oauth_state", stateEncoded, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 900 });
   jar.set("meli_code_verifier", codeVerifier, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 900 });
 
-  const authUrl = new URL("https://auth.mercadolivre.com/authorization");
+  // Importante: usar o domínio correto do país. Para Brasil: mercadolivre.com.br
+  const authUrl = new URL("https://auth.mercadolivre.com.br/authorization");
   authUrl.searchParams.set("response_type", "code");
   authUrl.searchParams.set("client_id", clientId);
   authUrl.searchParams.set("redirect_uri", redirectUri);

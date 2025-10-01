@@ -21,6 +21,7 @@ async function exchangeToken(params: URLSearchParams, codeVerifier?: string) {
     body.set("code_verifier", codeVerifier);
   }
 
+  // Token endpoint global continua em mercadolibre.com
   const res = await fetch("https://api.mercadolibre.com/oauth/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },

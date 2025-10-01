@@ -47,8 +47,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     }
 
     const token = JSON.parse(tokenCookie.value);
-    const accessToken = token.access_token;
-    const userId = String(token.user_id); // Converter para string
+    const accessToken: string = String(token.access_token);
+    const userId: string = String(token.user_id); // garantir tipo string
 
     // Parâmetros de data (padrão: 30 dias)
     const { searchParams } = new URL(req.url);

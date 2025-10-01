@@ -60,8 +60,8 @@ export async function GET(): Promise<NextResponse> {
     }
 
     const token = JSON.parse(tokenCookie.value);
-    const accessToken = token.access_token;
-    const userId = String(token.user_id); // Converter para string
+    const accessToken: string = String(token.access_token);
+    const userId: string = String(token.user_id); // garantir tipo string
 
     // Buscar TODOS os anúncios (não só 10!)
     const searchRes = await fetch(

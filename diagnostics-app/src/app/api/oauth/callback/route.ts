@@ -6,10 +6,11 @@ async function exchangeToken(params: URLSearchParams, codeVerifier?: string) {
   const clientSecret = process.env.MELI_CLIENT_SECRET!.trim();
   const redirectUri = process.env.MELI_REDIRECT_URI!.trim();
   
-  // Debug: log para verificar se as variáveis estão sendo lidas
-  console.log('Client ID:', clientId);
-  console.log('Client Secret length:', clientSecret?.length);
-  console.log('Redirect URI:', redirectUri);
+  console.log('[EXCHANGE] Iniciando troca de token');
+  console.log('[EXCHANGE] Code verifier recebido:', !!codeVerifier);
+  console.log('[EXCHANGE] Code verifier length:', codeVerifier?.length);
+  console.log('[EXCHANGE] Client ID:', clientId);
+  console.log('[EXCHANGE] Redirect URI:', redirectUri);
 
   const body = new URLSearchParams();
   body.set("grant_type", "authorization_code");
@@ -17,8 +18,12 @@ async function exchangeToken(params: URLSearchParams, codeVerifier?: string) {
   body.set("client_secret", clientSecret);
   body.set("code", params.get("code") || "");
   body.set("redirect_uri", redirectUri);
+  
   if (codeVerifier) {
+    console.log('[EXCHANGE] Adicionando code_verifier ao body');
     body.set("code_verifier", codeVerifier);
+  } else {
+    console.error('[EXCHANGE] ⚠️ CODE_VERIFIER ESTÁ VAZIO OU UNDEFINED!');
   }
 
   const res = await fetch("https://api.mercadolibre.com/oauth/token", {
@@ -111,6 +116,12 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     
     // Armazenar em cookie de sessão
     const res = NextResponse.json({ ok: true, user_id: token?.user_id, scope: token?.scope });
+    
+    // Headers para evitar cache
+    res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+    res.headers.set("Pragma", "no-cache");
+    res.headers.set("Expires", "0");
+    
     res.cookies.set("meli_token", JSON.stringify(token), {
       httpOnly: true,
       sameSite: "lax",

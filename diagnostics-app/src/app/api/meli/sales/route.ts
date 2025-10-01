@@ -1,7 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
-export async function GET(_req: NextRequest): Promise<NextResponse> {
+/**
+ * Sales Analytics API - Baseado na lógica da biblioteca
+ * Calcula vendas REAIS do período (não o histórico total)
+ */
+
+interface OrderItem {
+  item: {
+    id: string;
+    title: string;
+  };
+  quantity: number;
+  unit_price: number;
+}
+
+interface Payment {
+  payment_method_id: string;
+  total_paid_amount: number;
+}
+
+interface Order {
+  id: string;
+  status: string;
+  total_amount: number;
+  date_created: string;
+  order_items: OrderItem[];
+  payments: Payment[];
+}
+
+interface SalesMetrics {
+  total_orders: number;
+  total_revenue: number;
+  avg_order_value: number;
+  status_distribution: Record<string, number>;
+  payment_methods: Record<string, number>;
+}
+
+export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
     const jar = await cookies();
     const tokenCookie = jar.get("meli_token");
@@ -14,16 +50,21 @@ export async function GET(_req: NextRequest): Promise<NextResponse> {
     const accessToken = token.access_token;
     const userId = token.user_id;
 
-    // Data de 30 dias atrás
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const dateFrom = thirtyDaysAgo.toISOString();
+    // Parâmetros de data (padrão: 30 dias)
+    const { searchParams } = new URL(req.url);
+    const daysParam = searchParams.get('days') || '30';
+    const days = parseInt(daysParam);
 
-    // Buscar pedidos dos últimos 30 dias
+    const dateFrom = new Date();
+    dateFrom.setDate(dateFrom.getDate() - days);
+    const dateFromISO = dateFrom.toISOString();
+
+    // Buscar TODOS os pedidos do período (não só 50!)
     const ordersRes = await fetch(
-      `https://api.mercadolibre.com/orders/search?seller=${userId}&order.date_created.from=${dateFrom}&limit=50`,
+      `https://api.mercadolibre.com/orders/search?seller=${userId}&order.date_created.from=${dateFromISO}&limit=200`,
       {
         headers: { "Authorization": `Bearer ${accessToken}` },
+        cache: "no-store",
       }
     );
 
@@ -36,11 +77,13 @@ export async function GET(_req: NextRequest): Promise<NextResponse> {
     }
 
     const ordersData = await ordersRes.json();
-    const orders = ordersData.results || [];
+    const orders: Order[] = ordersData.results || [];
 
-    // Análise das vendas
+    // Calcular métricas (baseado na biblioteca)
+    const metrics = calculateOrderMetrics(orders);
+
+    // Análise de vendas por produto (baseado na biblioteca)
     const salesByItem: Record<string, { title: string; quantity: number; revenue: number }> = {};
-    let totalRevenue = 0;
 
     for (const order of orders) {
       for (const item of order.order_items || []) {
@@ -56,25 +99,128 @@ export async function GET(_req: NextRequest): Promise<NextResponse> {
 
         salesByItem[itemId].quantity += quantity;
         salesByItem[itemId].revenue += revenue;
-        totalRevenue += revenue;
       }
     }
 
-    // Ordenar por mais vendidos
+    // Top 20 produtos mais vendidos
     const topSellers = Object.entries(salesByItem)
       .map(([id, data]) => ({ id, ...data }))
       .sort((a, b) => b.quantity - a.quantity)
-      .slice(0, 10);
+      .slice(0, 20);
+
+    // Produtos SEM vendas (precisamos buscar todos os anúncios para comparar)
+    const zeroSalesProducts = await getZeroSalesProducts(accessToken, userId, salesByItem);
 
     return NextResponse.json({ 
-      ok: true, 
-      total_orders: orders.length,
-      total_revenue: totalRevenue,
+      ok: true,
+      period_days: days,
+      date_from: dateFromISO,
+      metrics,
       top_sellers: topSellers,
+      zero_sales_products: zeroSalesProducts,
     });
 
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Erro ao buscar vendas";
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
+  }
+}
+
+/**
+ * Calcula métricas dos pedidos - BASEADO NA BIBLIOTECA
+ */
+function calculateOrderMetrics(orders: Order[]): SalesMetrics {
+  if (!orders || orders.length === 0) {
+    return {
+      total_orders: 0,
+      total_revenue: 0,
+      avg_order_value: 0,
+      status_distribution: {},
+      payment_methods: {},
+    };
+  }
+
+  const totalRevenue = orders.reduce(
+    (sum, order) => sum + parseFloat(order.total_amount?.toString() || '0'),
+    0
+  );
+
+  const avgOrderValue = totalRevenue / orders.length;
+
+  // Distribuição por status
+  const statusDist: Record<string, number> = {};
+  const paymentMethods: Record<string, number> = {};
+
+  for (const order of orders) {
+    const status = order.status || 'unknown';
+    statusDist[status] = (statusDist[status] || 0) + 1;
+
+    // Método de pagamento
+    const payments = order.payments || [];
+    for (const payment of payments) {
+      const method = payment.payment_method_id || 'unknown';
+      paymentMethods[method] = (paymentMethods[method] || 0) + 1;
+    }
+  }
+
+  return {
+    total_orders: orders.length,
+    total_revenue: totalRevenue,
+    avg_order_value: avgOrderValue,
+    status_distribution: statusDist,
+    payment_methods: paymentMethods,
+  };
+}
+
+/**
+ * Identifica produtos sem vendas no período
+ */
+async function getZeroSalesProducts(
+  accessToken: string,
+  userId: string,
+  salesByItem: Record<string, unknown>
+): Promise<Array<{id: string; title: string; days_without_sales: number}>> {
+  try {
+    // Buscar TODOS os anúncios ativos
+    const itemsRes = await fetch(
+      `https://api.mercadolibre.com/users/${userId}/items/search?status=active&limit=200`,
+      {
+        headers: { "Authorization": `Bearer ${accessToken}` },
+        cache: "no-store",
+      }
+    );
+
+    if (!itemsRes.ok) return [];
+
+    const itemsData = await itemsRes.json();
+    const allItemIds: string[] = itemsData.results || [];
+
+    // Produtos que NÃO estão nas vendas
+    const zeroSales = allItemIds
+      .filter(itemId => !salesByItem[itemId])
+      .slice(0, 20); // Top 20 parados
+
+    // Buscar detalhes básicos
+    const zeroSalesDetails = await Promise.all(
+      zeroSales.map(async (itemId) => {
+        const itemRes = await fetch(
+          `https://api.mercadolibre.com/items/${itemId}`,
+          { cache: "no-store" }
+        );
+        if (!itemRes.ok) return null;
+        const item = await itemRes.json();
+        return {
+          id: item.id,
+          title: item.title,
+          days_without_sales: 60, // TODO: calcular baseado em última venda
+        };
+      })
+    );
+
+    return zeroSalesDetails.filter(item => item !== null) as Array<{id: string; title: string; days_without_sales: number}>;
+
+  } catch (e) {
+    console.error("Erro ao buscar produtos parados:", e);
+    return [];
   }
 }

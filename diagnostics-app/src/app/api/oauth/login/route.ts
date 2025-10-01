@@ -12,6 +12,10 @@ function getEnv(name: string): string {
 export async function GET(): Promise<NextResponse> {
   const clientId = getEnv("MELI_CLIENT_ID");
   const redirectUri = getEnv("MELI_REDIRECT_URI");
+  
+  console.log('🔑 Iniciando OAuth login');
+  console.log('CLIENT_ID:', clientId);
+  console.log('REDIRECT_URI:', redirectUri);
 
   // PKCE: gerar code_verifier e challenge S256
   const random = crypto.getRandomValues(new Uint8Array(32));
@@ -43,14 +47,7 @@ export async function GET(): Promise<NextResponse> {
   authUrl.searchParams.set("code_challenge", codeChallenge);
   authUrl.searchParams.set("code_challenge_method", "S256");
 
-  const response = NextResponse.redirect(authUrl.toString());
-  
-  // Headers para evitar cache
-  response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
-  response.headers.set("Pragma", "no-cache");
-  response.headers.set("Expires", "0");
-  
-  return response;
+  return NextResponse.redirect(authUrl.toString());
 }
 
 

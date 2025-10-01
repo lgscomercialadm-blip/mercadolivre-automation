@@ -6,11 +6,10 @@ async function exchangeToken(params: URLSearchParams, codeVerifier?: string) {
   const clientSecret = process.env.MELI_CLIENT_SECRET!.trim();
   const redirectUri = process.env.MELI_REDIRECT_URI!.trim();
   
-  console.log('[EXCHANGE] Iniciando troca de token');
-  console.log('[EXCHANGE] Code verifier recebido:', !!codeVerifier);
-  console.log('[EXCHANGE] Code verifier length:', codeVerifier?.length);
-  console.log('[EXCHANGE] Client ID:', clientId);
-  console.log('[EXCHANGE] Redirect URI:', redirectUri);
+  // Debug: log para verificar se as variáveis estão sendo lidas
+  console.log('Client ID:', clientId);
+  console.log('Client Secret length:', clientSecret?.length);
+  console.log('Redirect URI:', redirectUri);
 
   const body = new URLSearchParams();
   body.set("grant_type", "authorization_code");
@@ -18,12 +17,8 @@ async function exchangeToken(params: URLSearchParams, codeVerifier?: string) {
   body.set("client_secret", clientSecret);
   body.set("code", params.get("code") || "");
   body.set("redirect_uri", redirectUri);
-  
   if (codeVerifier) {
-    console.log('[EXCHANGE] Adicionando code_verifier ao body');
     body.set("code_verifier", codeVerifier);
-  } else {
-    console.error('[EXCHANGE] ⚠️ CODE_VERIFIER ESTÁ VAZIO OU UNDEFINED!');
   }
 
   const res = await fetch("https://api.mercadolibre.com/oauth/token", {
@@ -35,6 +30,11 @@ async function exchangeToken(params: URLSearchParams, codeVerifier?: string) {
 
   if (!res.ok) {
     const text = await res.text();
+    console.error('❌ ERRO NA TROCA DO TOKEN:');
+    console.error('Status:', res.status);
+    console.error('Resposta ML:', text);
+    console.error('CLIENT_ID usado:', clientId);
+    console.error('REDIRECT_URI usado:', redirectUri);
     throw new Error(`Falha ao trocar token: ${res.status} ${text}`);
   }
   return res.json();
@@ -60,18 +60,12 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
     // SOLUÇÃO ROBUSTA: Extrair code_verifier do state (estratégia primária)
     let codeVerifier: string | undefined;
-    let stateDecodeError: string | null = null;
     
     try {
       // Tentar decodificar o state que contém o verifier
       const stateDecoded = Buffer.from(receivedState, "base64url").toString("utf-8");
       const stateData = JSON.parse(stateDecoded);
       codeVerifier = stateData.verifier;
-      
-      console.log("[CALLBACK] State decodificado com sucesso:", { 
-        hasVerifier: !!codeVerifier,
-        timestamp: stateData.timestamp 
-      });
       
       // Validar timestamp (não aceitar states com mais de 15 minutos)
       const age = Date.now() - stateData.timestamp;
@@ -82,16 +76,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           error: "State expirado. Tente fazer login novamente." 
         });
       }
-    } catch (err) {
+    } catch {
       // Se falhar ao decodificar, tentar pegar do cookie (backup)
-      stateDecodeError = err instanceof Error ? err.message : "Erro desconhecido";
-      console.log("[CALLBACK] Falha ao decodificar state:", stateDecodeError);
-      console.log("[CALLBACK] Tentando pegar verifier do cookie...");
       codeVerifier = jar.get("meli_code_verifier")?.value;
-      
-      if (codeVerifier) {
-        console.log("[CALLBACK] Code verifier encontrado no cookie!");
-      }
     }
     
     // Verificar se conseguimos o code_verifier de alguma fonte
@@ -102,26 +89,16 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         error: "code_verifier não encontrado. Tente fazer login novamente.",
         debug: {
           state_received: !!receivedState,
-          state_decode_error: stateDecodeError,
           cookie_verifier: !!jar.get("meli_code_verifier"),
-          cookie_state: !!jar.get("meli_oauth_state"),
-          all_cookies: jar.getAll().map(c => c.name)
+          cookie_state: !!jar.get("meli_oauth_state")
         }
       });
     }
-    
-    console.log("[CALLBACK] Code verifier OK, trocando por token...");
     
     const token = await exchangeToken(url.searchParams, codeVerifier);
     
     // Armazenar em cookie de sessão
     const res = NextResponse.json({ ok: true, user_id: token?.user_id, scope: token?.scope });
-    
-    // Headers para evitar cache
-    res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
-    res.headers.set("Pragma", "no-cache");
-    res.headers.set("Expires", "0");
-    
     res.cookies.set("meli_token", JSON.stringify(token), {
       httpOnly: true,
       sameSite: "lax",

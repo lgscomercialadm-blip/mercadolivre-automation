@@ -40,38 +40,75 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const code = url.searchParams.get("code");
   const error = url.searchParams.get("error");
   const jar = await cookies();
-  const expectedState = jar.get("meli_oauth_state")?.value;
   const receivedState = url.searchParams.get("state") || undefined;
 
   if (error) {
     return NextResponse.json({ ok: false, step: "auth", error });
   }
   if (!code) {
-    return NextResponse.json({ ok: false, step: "callback", error: "Código ausente", state_expected: expectedState, state_received: receivedState });
+    return NextResponse.json({ ok: false, step: "callback", error: "Código ausente" });
   }
-  if (expectedState && receivedState && expectedState !== receivedState) {
-    return NextResponse.json({ ok: false, step: "state", error: "State inválido", state_expected: expectedState, state_received: receivedState });
+  if (!receivedState) {
+    return NextResponse.json({ ok: false, step: "callback", error: "State ausente" });
   }
 
   try {
-    const codeVerifier = jar.get("meli_code_verifier")?.value;
+    // SOLUÇÃO ROBUSTA: Extrair code_verifier do state (estratégia primária)
+    let codeVerifier: string | undefined;
+    
+    try {
+      // Tentar decodificar o state que contém o verifier
+      const stateDecoded = Buffer.from(receivedState, "base64url").toString("utf-8");
+      const stateData = JSON.parse(stateDecoded);
+      codeVerifier = stateData.verifier;
+      
+      // Validar timestamp (não aceitar states com mais de 15 minutos)
+      const age = Date.now() - stateData.timestamp;
+      if (age > 900000) { // 15 minutos
+        return NextResponse.json({ 
+          ok: false, 
+          step: "state", 
+          error: "State expirado. Tente fazer login novamente." 
+        });
+      }
+    } catch (decodeError) {
+      // Se falhar ao decodificar, tentar pegar do cookie (backup)
+      codeVerifier = jar.get("meli_code_verifier")?.value;
+    }
+    
+    // Verificar se conseguimos o code_verifier de alguma fonte
+    if (!codeVerifier) {
+      return NextResponse.json({ 
+        ok: false, 
+        step: "verifier", 
+        error: "code_verifier não encontrado. Tente fazer login novamente.",
+        debug: {
+          state_received: !!receivedState,
+          cookie_verifier: !!jar.get("meli_code_verifier"),
+          cookie_state: !!jar.get("meli_oauth_state")
+        }
+      });
+    }
+    
     const token = await exchangeToken(url.searchParams, codeVerifier);
-    // armazenar em cookie de sessão simples (posteriormente Supabase)
+    
+    // Armazenar em cookie de sessão
     const res = NextResponse.json({ ok: true, user_id: token?.user_id, scope: token?.scope });
     res.cookies.set("meli_token", JSON.stringify(token), {
       httpOnly: true,
       sameSite: "lax",
       path: "/",
-      secure: true,
-      maxAge: 60 * 60 * 24, // 1 dia
+      maxAge: 60 * 60 * 24 * 30, // 30 dias (token do ML expira em 6h mas temos refresh)
     });
-    // limpar cookies temporários
+    
+    // Limpar cookies temporários
     res.cookies.delete("meli_oauth_state");
     res.cookies.delete("meli_code_verifier");
+    
     return res;
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Erro na troca de token";
-    return NextResponse.json({ ok: false, step: "exchange", error: message, code, state: receivedState });
+    return NextResponse.json({ ok: false, step: "exchange", error: message, code });
   }
 }
 

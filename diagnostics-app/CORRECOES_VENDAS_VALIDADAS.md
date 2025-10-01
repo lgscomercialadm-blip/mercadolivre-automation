@@ -207,3 +207,6 @@ https://diagnostics-app-topaz.vercel.app/api/meli/sales?days=30
 
 **Obrigado pela validação!** Estava faltando essas correções importantes! 🙏
 
+
+
+

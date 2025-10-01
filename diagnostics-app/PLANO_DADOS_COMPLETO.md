@@ -513,3 +513,6 @@ Quando um seller faz login, você precisa puxar **TUDO** para ter uma visão 360
 
 **Estou pronto para implementar o que você decidir!** 🚀
 
+
+
+

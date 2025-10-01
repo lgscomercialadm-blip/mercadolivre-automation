@@ -398,3 +398,4 @@ Criar diagnóstico completo de sellers para reuniões comerciais de agência.
 2. **Eu implemento:** APIs, análises e dashboard
 3. **Você valida:** Teste com conta real
 4. **Iteramos:** Refinamos baseado no feedback
+

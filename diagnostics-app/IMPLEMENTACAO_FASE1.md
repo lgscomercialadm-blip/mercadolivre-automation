@@ -291,3 +291,6 @@ https://diagnostics-app-fixed.vercel.app/diagnostics
 
 **Próximo:** Implementar Fase 2 (campanhas, promoções, perguntas, claims)
 
+
+
+

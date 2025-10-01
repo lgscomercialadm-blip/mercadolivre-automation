@@ -55,13 +55,17 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const daysParam = searchParams.get('days') || '30';
     const days = parseInt(daysParam);
 
+    // Calcular date_from e date_to (período completo)
+    const dateTo = new Date();
     const dateFrom = new Date();
     dateFrom.setDate(dateFrom.getDate() - days);
+    
     const dateFromISO = dateFrom.toISOString();
+    const dateToISO = dateTo.toISOString();
 
-    // Buscar TODOS os pedidos do período (não só 50!)
+    // Buscar TODOS os pedidos do período (CORRETO: com date_from E date_to)
     const ordersRes = await fetch(
-      `https://api.mercadolibre.com/orders/search?seller=${userId}&order.date_created.from=${dateFromISO}&limit=200&order.status=paid`,
+      `https://api.mercadolibre.com/orders/search?seller=${userId}&order.date_created.from=${dateFromISO}&order.date_created.to=${dateToISO}&limit=200`,
       {
         headers: { "Authorization": `Bearer ${accessToken}` },
         cache: "no-store",
@@ -82,16 +86,30 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     // Calcular métricas (baseado na biblioteca)
     const metrics = calculateOrderMetrics(orders);
 
-    // Análise de vendas por produto (baseado na biblioteca)
+    // Análise de vendas por produto (CORRETO: usando total_amount do pedido)
     const salesByItem: Record<string, { title: string; quantity: number; revenue: number }> = {};
 
     for (const order of orders) {
-      for (const item of order.order_items || []) {
+      // Total do pedido (pode ter múltiplos itens)
+      const orderTotal = parseFloat(order.total_amount?.toString() || '0');
+      const orderItems = order.order_items || [];
+      
+      // Se o pedido tem múltiplos itens, dividir proporcionalmente
+      const totalItemsValue = orderItems.reduce((sum, item) => {
+        return sum + (item.quantity * item.unit_price);
+      }, 0);
+      
+      for (const item of orderItems) {
         const itemId = item.item.id;
         const title = item.item.title;
         const quantity = item.quantity || 0;
-        const price = item.unit_price || 0;
-        const revenue = quantity * price;
+        
+        // Calcular revenue proporcional ao total do pedido
+        // (isso considera descontos, frete, etc)
+        const itemValue = item.quantity * item.unit_price;
+        const revenue = totalItemsValue > 0 
+          ? (itemValue / totalItemsValue) * orderTotal 
+          : itemValue;
 
         if (!salesByItem[itemId]) {
           salesByItem[itemId] = { title, quantity: 0, revenue: 0 };
@@ -115,6 +133,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       ok: true,
       period_days: days,
       date_from: dateFromISO,
+      date_to: dateToISO,
       metrics,
       top_sellers: topSellers,
       zero_sales_products: zeroSalesProducts,
